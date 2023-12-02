@@ -1,0 +1,11 @@
+# sniff
+
+Youtube to album system
+
+input files are `*.album` and `*.albums`
+	- `*.album` is a toml file with no sections
+	- `*.albums` is a toml file
+depends on `ffmpeg` and `yt-dlp`
+
+builds a folder containing metadata and the needed files
+filemetadata will need to be updated manually.
