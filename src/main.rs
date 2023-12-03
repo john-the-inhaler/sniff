@@ -22,22 +22,41 @@ impl Album {
         }
         return None;
     }
-    fn diff<'a>(&'a self, oth: &'a Self) -> Vec<(&'a str, &'a str)> {
+    // `Ok(_)` means add, `Err(_)` means delete
+    fn diff<'a>(&'a self, oth: &'a Self) -> (Vec<(&'a str, &'a str)>, Vec<&'a str>) {
        // using twoside shuffling
-       let mut result = Vec::new();
+       let mut additions = Vec::new();
+       let mut deletions = Vec::new();
+       // Everything in here and not in there needs to be added!
        for (k, v) in self.songs.iter() {
            if let Some(v2) = oth.contains(k) {
-               if v2 == v { continue; }         
+               if v2 == v { continue; }
            }
-           result.push((&k[..], &v[..]));
+           additions.push((&k[..], &v[..]));
        }
+       // everything in there not in here is to be removed
        for (k, v) in oth.songs.iter() {
            if let Some(v2) = self.contains(k) {
-               if v2 == v { continue; }         
+               if v2 == v { continue; }
            }
-           result.push((&k[..], &v[..]));
+           deletions.push(&k[..]);
        }
-       result
+       (additions, deletions)
+    }
+    fn render(&self) -> String {
+        // calculate size
+        let mut size = 0;
+        for (key, value) in self.songs.iter() {
+            size += key.len() + 1 + value.len() + 1;
+        }
+        let mut buff = String::with_capacity(size);
+        for (key, value) in self.songs.iter() {
+            buff.push_str(&key);
+            buff.push('=');
+            buff.push_str(&value);
+            buff.push('\n');
+        }
+        buff        
     }
 }
 
@@ -109,7 +128,8 @@ fn download_song(dest: &str, ident: &str) -> io::Result<bool> {
     command.arg("-i")
            .arg(&temp_file[..])
            .arg(dest)
-           .stdout(process::Stdio::piped());
+           .stdout(process::Stdio::null()) 
+           .stderr(process::Stdio::null());
     println!("[{ident}] invoking:\n{command:?}");
     let mut child = command.spawn()?;
     let result = child.wait()?;
@@ -119,8 +139,55 @@ fn download_song(dest: &str, ident: &str) -> io::Result<bool> {
     }
     println!("[{ident}] Audio Extraction success");
     println!("[{ident}] Cleaning up temp files");
-    Command::new("rm").arg(temp_file).spawn()?;
+    fs::remove_file(temp_file)?;
     Ok(true) 
+}
+fn detach<'a, 'b: 'a, T: ?Sized>(x: &'a T) -> &'b T {
+    use std::ptr::{read, addr_of};
+    unsafe{ read(addr_of!(x).cast()) }
+}
+fn enact_plan(album: &Album, strategy: Strategy) -> io::Result<()> {
+    println!("[{}] generating plan", &album.title);
+    let mut additions = Vec::with_capacity(0);
+    let mut deletions = Vec::with_capacity(0);
+    match strategy {
+        Strategy::New => { 
+            additions.extend(album.songs.iter().map(|(a, b)|(a.as_str(), b.as_str())));
+        }
+        Strategy::ReBuild(other) => {
+            let (addit, delet) = album.diff(detach(&other));
+            for i in addit {additions.push(i);}
+            for i in delet {deletions.push(i);}
+        }
+    }
+    let mut path = env::current_dir()?;
+    path.push(&album.title);
+    if !path.exists() {
+        println!("[{}] album folder not found, making it", &album.title);
+        fs::create_dir(&path)?;
+    }
+    println!("[{}] performing deletions", &album.title);
+    for target in deletions {
+        path.push(target);
+        path.set_extension("mp3");
+        println!("[{}] deleting `{}`", &album.title, path.display());
+        fs::remove_file(&path)?;
+        path.pop();
+    }
+    println!("[{}] performing additions", &album.title);
+    for (target, id) in additions {
+        path.push(target);
+        path.set_extension("mp3");
+        println!("[{}] downloading `{}`", &album.title, path.display());
+        download_song(path.to_str().unwrap(), id)?;
+        path.pop();
+    }
+    println!("[{}] creating `.album` file", &album.title);
+    path.push(".album");
+    //render album to string
+    let mani = album.render();
+    fs::write(&path, mani)?;
+    Ok(())
 }
 
 fn main() -> io::Result<()>{
@@ -135,9 +202,9 @@ fn main() -> io::Result<()>{
     let album = load_album_file("./res/test.album")?.expect("fuck this");
     println!("{album:?}");
 
-    let test_dest = "./.sniff/bop.mp3";
+    let strategy = get_strategy(&album)?;
+    enact_plan(&album, strategy)?;
 
-    download_song(test_dest, &album.songs[0].1)?;
 
     Ok(())
 }
