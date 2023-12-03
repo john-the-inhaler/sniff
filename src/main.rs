@@ -199,7 +199,7 @@ fn main() -> io::Result<()>{
         fs::create_dir(sniff)?;
     }
     
-    let album = load_album_file("./res/test.album")?.expect("fuck this");
+    let album = load_album_file(&env::args().skip(1).next().unwrap())?.expect("fuck this");
     println!("{album:?}");
 
     let strategy = get_strategy(&album)?;
