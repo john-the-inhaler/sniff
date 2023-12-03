@@ -2,6 +2,8 @@
 name = "sniff"
 version = "0.1.0"
 edition = "2021"
+licencse = "mit"
+description = "A simple ytdlp bulk download wrapper"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
