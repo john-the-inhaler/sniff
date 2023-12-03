@@ -9,3 +9,14 @@ depends on `ffmpeg` and `yt-dlp`
 
 builds a folder containing metadata and the needed files
 filemetadata will need to be updated manually.
+
+Generated album folders will have a `.album` file for updating
+
+A temporary `.sniff` file is used.
+
+
+## notes 
+the `.sniff` directory is not yet implemented. Don't expect any structure to be there
+
+yt-dlp is provided `--print after_move:filepath` to get where the file is downloadedto
+this is because we let yt-dlp choose the download format
